@@ -215,6 +215,7 @@ pipeline {
             model.unet_config.use_flash_attention=False \
             model.unet_config.attention_resolutions=[1] \
             model.unet_config.channel_mult=[1] \
+            model.capture_cudagraph_iters=15 \
             "
         sh "pip install 'webdataset>=0.1.48,<=0.1.62'"
         sh "rm -rf /home/TestData/multimodal/stable_diffusion_train"
