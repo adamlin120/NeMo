@@ -99,7 +99,7 @@ class ParallelTranscriptionConfig:
     pretrained_name: Optional[str] = None
     extract_nbest: bool = False
     presort_manifest: bool = True
-    rnnt_decoding: RNNTDecodingConfig = RNNTDecodingConfig()
+    # rnnt_decoding: RNNTDecodingConfig = RNNTDecodingConfig()
     multitask_decoding: MultiTaskDecodingConfig = MultiTaskDecodingConfig()
     gt_text_attr_name: str = "text"
     output_filename: Optional[str] = None    
