@@ -95,6 +95,15 @@ class ParallelTranscriptionConfig:
     predict_ds: ASRDatasetConfig = ASRDatasetConfig(return_sample_id=True, num_workers=4)
     output_path: str = MISSING
 
+    # Additional fields from TranscriptionConfig
+    pretrained_name: Optional[str] = None
+    extract_nbest: bool = False
+    presort_manifest: bool = True
+    rnnt_decoding: RNNTDecodingConfig = RNNTDecodingConfig()
+    multitask_decoding: MultiTaskDecodingConfig = MultiTaskDecodingConfig()
+    gt_text_attr_name: str = "text"
+    output_filename: Optional[str] = None    
+
     # when return_predictions is enabled, the prediction call would keep all the predictions in memory and return them when prediction is done
     return_predictions: bool = False
     use_cer: bool = False
@@ -152,8 +161,17 @@ def main(cfg: ParallelTranscriptionConfig):
         )
         model = ASRModel.from_pretrained(model_name=cfg.model, map_location="cpu")
 
-    if isinstance(model, EncDecHybridRNNTCTCModel) and cfg.decoder_type is not None:
-        model.change_decoding_strategy(decoder_type=cfg.decoder_type)
+    # Set up decoding strategy based on the model type
+    if isinstance(model, EncDecHybridRNNTCTCModel):
+        if cfg.decoder_type == "rnnt":
+            model.change_decoding_strategy(cfg.rnnt_decoding, decoder_type="rnnt")
+        elif cfg.decoder_type == "ctc":
+            model.change_decoding_strategy(cfg.ctc_decoding, decoder_type="ctc")
+    elif isinstance(model, ASRModel):
+        if hasattr(model.decoding, 'beam'):
+            model.change_decoding_strategy(cfg.multitask_decoding)
+        else:
+            model.change_decoding_strategy(cfg.rnnt_decoding)
 
     trainer = ptl.Trainer(**cfg.trainer)
 
@@ -164,7 +182,13 @@ def main(cfg: ParallelTranscriptionConfig):
     os.makedirs(cfg.output_path, exist_ok=True)
     # trainer.global_rank is not valid before predict() is called. Need this hack to find the correct global_rank.
     global_rank = trainer.node_rank * trainer.num_devices + int(os.environ.get("LOCAL_RANK", 0))
-    output_file = os.path.join(cfg.output_path, f"predictions_{global_rank}.json")
+    
+    # Update the output file name if provided
+    if cfg.output_filename:
+        output_file = cfg.output_filename
+    else:
+        output_file = os.path.join(cfg.output_path, f"predictions_{global_rank}.json")
+    
     predictor_writer = ASRPredictionWriter(dataset=data_loader.dataset, output_file=output_file)
     trainer.callbacks.extend([predictor_writer])
 
